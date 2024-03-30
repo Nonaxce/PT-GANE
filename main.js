@@ -35,8 +35,19 @@ loadSprite("bullet-explosion", "sprites/textures/bullet-explosion.png")
 loadSprite("activator", "sprites/textures/activator.png")
 loadSprite("stationer", "sprites/textures/stationer.png")
 loadSprite("portal", "sprites/textures/portal.png")
-loadSprite("lava", "sprites/textures/lava.png")
-loadSprite("portalShard", "sprites/textures/portalShard.png")
+loadSprite("portalShard", "sprites/textures/portalShard.png", {
+    sliceX: 2,
+    sliceY: 1,
+    scale: 1,
+    anims: {
+        sparkle: {
+            from: 0,
+            to: 1,
+            speed: 1,
+            loop: true
+        }
+    }
+})
 
 
 // LEVEL 1
@@ -54,8 +65,8 @@ loadSprite("level-1-enemy", "sprites/enemies/level-1-enemy.png", {
             loop: true
         },
         idle: {
-            from: 1,
-            to: 2,
+            from: 0,
+            to: 0,
             speed: 2,
             loop: true
         }
@@ -100,6 +111,21 @@ loadSprite("level-2-enemy", "sprites/enemies/level-2-enemy.png", {
     }
 })
 
+// LEVEL 3
+loadSprite("lava", "sprites/textures/level-3/lava.png", {
+    sliceX: 4,
+    sliceY: 1,
+    scale: 1,
+    anims: {
+        burn: {
+            from: 0,
+            to: 3,
+            speed: 10,
+            loop: true
+        }
+    }
+})
+
 // font
 loadFont("myFont", "fonts/DotGothic16-Regular.ttf")
 
@@ -114,8 +140,8 @@ let JUMP_STRENGTH = 670;
 const GUN_DAMAGE = 50;
 const BULLET_SPEED = 1200
 
-const SPAWNER_LIMIT = 5;
-let currentLevel = 0;    
+const SPAWNER_LIMIT = 3;
+let currentLevel = 2;    
 
 
 
@@ -140,7 +166,7 @@ scene("ending_scene", () => {
     setBackground(155, 144, 155)
 })
 
-scene("failed", () => {
+scene("failed", (causeOfDeath) => {
     setBackground(23, 23, 23);
 
     const title = add([
@@ -148,6 +174,13 @@ scene("failed", () => {
         pos(width()/2, height()/2- 100),
         anchor("center"),
         scale(2)
+    ])
+
+    const causeOfDeathLabel = add([
+        text("cause of death: "+causeOfDeath, {font: "myFont"}),
+        pos(width()/2, height()/2- 20),
+        anchor("center"),
+        scale(1)
     ])
 
     onKeyPress("enter", () => {
@@ -454,11 +487,16 @@ scene("game", (LEVEL) => {
     // DAMAGE PLAYER
     async function damagePlayer(amount) {
         await player.hurt(amount);
-        player.health -= amount;
+        if ((player.health - amount) < 0) {
+            player.health = 0;
+        } else {
+            player.health -= amount;
+        }
     }
-    // the player gets healed every 5 seconds
+
+    // the player gets healed every 10 seconds
     async function passivelyHealPlayer(amount) {
-        loop(5, async () => {
+        loop(10, async () => {
             await player.heal(amount);
             if ((player.health + amount) > PLAYER_HEALTH) {
                 player.health += PLAYER_HEALTH - player.health;
@@ -469,6 +507,8 @@ scene("game", (LEVEL) => {
     }
     passivelyHealPlayer(20)
     
+
+
     // GUN ATTACK
     async function fireGun(dir) {
         return add([
@@ -483,6 +523,7 @@ scene("game", (LEVEL) => {
         ])
     }
 
+    // its set up like that para ma reverse naton ang values during the gravity flip
     let fireGunRIGHT = 0;
     let fireGunLEFT = 180;  
 
@@ -494,18 +535,30 @@ scene("game", (LEVEL) => {
         }
     })
 
+    // when you die
+    
+    onUpdate(async () => {
+        if (player.health <= 0) {
+            await wait(0.7)
+            await go("failed", "murder")
+        }
+    })
+
+    // function i got from kaboomjs website 
+    // the rate at which the particles will be scaled
     function grow(rate) {
 		return {
 			update() {
-				const n = rate * dt()
+				const n = rate * dt() // mul by dt so the time becomes consistent
 				this.scale.x += n
 				this.scale.y += n
 			},
 		}
 	}
-	function addExplode(p, n, rad, size) {
-		for (let i = 0; i < n; i++) {
-			wait(rand(n * 0.1), () => {
+    // spawns a particle for exploosionss
+	function addExplode(p, num, rad, size) {
+		for (let i = 0; i < num; i++) {
+			wait(rand(num * 0.1), () => {
 				for (let i = 0; i < 2; i++) {
 					add([
 						pos(p.add(rand(vec2(-rad), vec2(rad)))),
@@ -521,31 +574,35 @@ scene("game", (LEVEL) => {
 	}
 
 
-
+    // if enemy gets shot 
     onCollide("enemy", "bullet", (e, b) => {
-        addExplode(b.pos,1, 1, 1)
-        e.hurt(GUN_DAMAGE)
-        destroy(b)
+        addExplode(b.pos,1, 1, 1)   // add some exploding
+        e.hurt(GUN_DAMAGE)          // hurt the enemy
+        destroy(b)                  // and remove the bullet like nothing happened
     })
+
+    // if a bullet hits a wall
     onCollide("solid", "bullet", (s, b) => {
-        addExplode(b.pos, 1, 1, 1)
-        destroy(b)
+        addExplode(b.pos, 1, 1, 1)  // add some exploding
+        destroy(b)                  // remove the evidence
     })
 
 
-    //MOVABLE STUFF
+    // If a bullet gets shot on a movable object it apparently defys newtons third law of motion and propels the object.. backward! ?
     onCollide("movable", "bullet", function(m, b) {
         if(b.DIR === fireGunLEFT) {
             m.pos.x += 10;
         } else if (b.DIR === fireGunRIGHT) {
             m.pos.x -= 10
         }
-        destroy(b)
+        destroy(b)  // also remove the evidence
     })
+
+
 
     /* ----------------- TILE ANIMATIONS -------------------*/
     // DESERT FIG
-    if (LEVEL.level === 2) {
+    if (level.get("desertfig")) {
         for(const desertfig of level.get("desertfig")) {
             desertfig.play("sway")
         }
@@ -556,13 +613,20 @@ scene("game", (LEVEL) => {
         note.play("bounce")
     }
 
-    
-    
 
+    for(const portalShard of level.get("portalShard")) {
+        portalShard.play("sparkle")
+    }
+
+    if (level.get("lava")) {
+        for(const lava of level.get("lava")) {
+            lava.play("burn")
+        }
+    }
+
+    
 
     /* --------------------- EVENTS -------------------------- */
-
-    // desert figs
     
     // jumping on bouncer blocks
     onCollide("player", "ejector", () => {
@@ -589,7 +653,7 @@ scene("game", (LEVEL) => {
 
     // lava
     onCollide("player", "lava", (p, l) => {
-        go("failed")
+        go("failed", "toasted alive")
     })
 
       /* ----------------------- CHESTS ---------------------------------- */
@@ -759,6 +823,7 @@ scene("game", (LEVEL) => {
             currentSpawner = spawner;
             await onKeyPress("r", function() {
                 if (currentSpawner && spawner) {
+                    // if the player has "pickaxe" in their inventory 
                     if (player.inventory.tools.includes("pickaxe") === true) {
                         addExplode(player.pos, 1, 1, 1)
                         destroy(spawner)
@@ -775,9 +840,48 @@ scene("game", (LEVEL) => {
     }
     
     /* --------------------- ENEMY AI ----------------------- */
+    // async function makeEnemyGoAfterPLayer() {
+    //     for(const enemy of level.get("enemy")) {
+    //         enemy.onEnterState("idle", async() => {
+    //             if (
+    //                 player.pos.y >= enemy.pos.y - 100 && 
+    //                 player.pos.y <= enemy.pos.y + 20 && 
+    //                 player.pos.x >= enemy.pos.x - 1000 && 
+    //                 player.pos.x <= enemy.pos.x + 1000
+    //             ) {
+    //                 enemy.enterState("move")
+    //             } else {
+    //                 await enemy.move(rand(0, 180), 100)
+    //                 enemy.agro = false;
+    //             }
+    //         })
 
-    // runs a function every frame where if the enemy sees me or
-    // if they see me within a certain y level range then they attack me
+    //         enemy.onEnterState("attack", async() => {
+    //             if (!(
+    //                 player.pos.y >= enemy.pos.y - 100 && 
+    //                 player.pos.y <= enemy.pos.y + 20 && 
+    //                 player.pos.x >= enemy.pos.x - 1000 && 
+    //                 player.pos.x <= enemy.pos.x + 1000
+    //             )) {
+    //                 enemy.enterState("idle")
+    //             } else {
+    //                 await enemy.move((player.pos.sub(enemy.pos).unit()).scale(LEVEL.enemySpeed))
+    //                 if ((player.pos.sub(enemy.pos).unit()).scale(1).x < 0) {
+    //                     enemy.flipX = true;
+    //                     debug.log("left")
+    //                 } else {
+    //                     enemy.flipX = false;
+    //                     debug.log("right")
+    //                 }
+    //                 enemy.agro = true;
+    //             }
+    //         })
+    //     }
+    // }
+
+
+    /* runs a function every frame where if the enemy sees me or
+    if they see me within a certain y level and x range then they attack me */
     async function makeEnemyComeAfterPlayer() {
         await player.onUpdate(async function() {
             // for enemies that are spawned in the level
@@ -804,8 +908,8 @@ scene("game", (LEVEL) => {
                     
                 } else {
                     // they just be roaming
-                    await enemy.move(rand(0, 180), 100)
                     enemy.agro = false;
+                    await enemy.move(rand(-180, 180), 100)
                 }
 
             }
@@ -815,9 +919,13 @@ scene("game", (LEVEL) => {
     makeEnemyComeAfterPlayer()
 
     // animates enemy
-    loop(3, async() => {
+    loop(1, async() => {
         for(const enemy of level.get("enemy")) {
-            await enemy.play("move")
+            if (enemy.agro) {
+                await enemy.play("move")
+            } else {
+                await enemy.play("idle")
+            }
         }
     })
 
@@ -827,7 +935,6 @@ scene("game", (LEVEL) => {
     })
 
     // enemy fire, when enemy fires bullets
-    // idk recursion
     async function enemyFire() {
         // loops through all enemies
         for(const enemy of level.get("enemy")) {
@@ -845,9 +952,6 @@ scene("game", (LEVEL) => {
                 ])
             }
         }
-        
-        // just a 0.1 second delay
-        await wait(0.1, enemyFire)
     }
     // run the enemy fire ever 1 second
     loop(1, async () => {
@@ -871,14 +975,11 @@ scene("game", (LEVEL) => {
     player.onUpdate(() => {
         // i think 5000 ang max
         if (player.pos.y > 5000 || player.pos.y < -5000) {
-            go("failed")
+            go("failed", "falling into the void")
         }
     })
 
-    // when you die
-    on("death", "player", () => {
-        go("failed")
-    })
+    
 
     async function reverseGravity() {
         let angle = 0; // var to store current angle para ma check in conditions
@@ -979,126 +1080,134 @@ scene("game", (LEVEL) => {
     })
 
 
+    // level swicth
+    let numberOfPortalShards = 0;
+    let numberOfSpawners = 0;
 
-    // =========================== CONDITIONS ==============================
-    // ====================== C O N D I T I O N S ==========================
-    // ================== C* O  N  D  I  T  I  O  N *S =====================
-    // ====================== C O N D I T I O N S ==========================
-    // =========================== CONDITIONS ==============================
-
-
-
-    /* --------- oxygen loss ----------*/
-
-   // if oxygenloss is true for the level
-    if (LEVEL.level === 1) {
-        loop(0.8, () => {
-            if (player.oxygen > 0) {
-                player.oxygen -= 2;
-            }
-        })
-
-        var oxygenBar = make([
-            text("Oxygen:"+player.oxygen, {font: "myFont"}),
-            pos(healthLabel.pos.x, healthLabel.pos.y + 50),
-            scale(0.8)
-        ])
-
-        ui.add(oxygenBar);
-
-        oxygenBar.onUpdate(() => {
-            oxygenBar.text = "Oxygen: "+player.oxygen
-        })
-
-        // when player sufficates
-        function sufficate(amount) {
-            loop(2, () => {
-                damagePlayer(amount)
+    switch(LEVEL.level) {
+        case 1:
+            loop(0.8, () => {
+                if (player.oxygen > 0) {
+                    player.oxygen -= 2;
+                }
             })
-        }
-
-        // if player does lose oxygen or oxygen is 0
-        player.onUpdate(() => {
-            if (player.oxygen < 1) {
-                sufficate(20);
+    
+            var oxygenBar = make([
+                text("Oxygen:"+player.oxygen, {font: "myFont"}),
+                pos(healthLabel.pos.x, healthLabel.pos.y + 50),
+                scale(0.8)
+            ])
+    
+            ui.add(oxygenBar);
+    
+            oxygenBar.onUpdate(() => {
+                oxygenBar.text = "Oxygen: "+player.oxygen
+            })
+    
+            // when player sufficates
+            function sufficate(amount) {
+                loop(2, () => {
+                    damagePlayer(amount)
+                })
             }
-        })
+    
+            // if player does lose oxygen or oxygen is 0
+            player.onUpdate(() => {
+                if (player.oxygen < 1) {
+                    sufficate(20);
+                }
+                if (player.health <= 0) {
+                    go("failed", "suffication")
+                }
+            })
+    
+            numberOfPortalShards = level.get("portalShard").length;
+    
+            player.onUpdate(async() => {
+                if(level.get("spawner").length <= 0 && player.inventory.portal_shards == numberOfPortalShards) {
+                    player.canGoToNextLevel = true;
+                } else {
+                    player.canGoToNextLevel = false;
+                    debug.log(`/n${level.get("spawner").length} /n${player.inventory.portal_shards} - ${numberOfPortalShards} /n`)
+                }
+            })
+            
+            
+            camScale(1)
+            break;
+        case 2:
 
-        const numberOfPortalShards = level.get("portalShards").length;
-        const numberOfSpawners = level.get("portalShards").length;
+            // slows the player down kay may hangin
+            player.speedMultiplier = 0.5; 
+            
+            // for deserts and stuff
+            let currentDesertFig  = "";
+            onCollide("player", "desertfig", (player, desertfig) => {
+                currentDesertFig = desertfig;
+                onKeyPress("c", () => {
+                    if(currentDesertFig && player.inventory.tools.includes("shears") == true) {
+                        addExplode(currentDesertFig.pos, 1, 1, 0.5)
+                        destroy(currentDesertFig);
+                    } else {
+                        addExclaim("you need shears", player.pos)
+                    }
+                })
+            })
 
-        player.onUpdate(async() => {
-            if(numberOfSpawners <= 0 && player.inventory.portal_shards == numberOfPortalShards) {
+            onCollideEnd("player", "desertfig", () => {
+                currentDesertFig = "";
+            })
+
+            
+            camScale(1.2)
+            break;
+        case 3:
+
+            let activated = 0;
+            let areAllStationersActivated = false;
+
+            onCollide("activator", "stationer", () => {
+                activated++;
+                console.log(activated)
+                if(activated >= level.get("stationer").length) {
+                    areAllStationersActivated = true;
+                }
+            })
+        
+            onCollideEnd("activator", "stationer", () => {
+                activated--;
+                console.log(activated)
+            })
+
+            numberOfPortalShards = level.get("portalShards").length;
+            numberOfSpawners = level.get("portalShards").length;
+
+            if(
+                numberOfPortalShards <= 0 && 
+                numberOfSpawners.length <= 0 && 
+                areAllStationersActivated == true
+            ) {
                 player.canGoToNextLevel = true;
             } else {
                 player.canGoToNextLevel = false;
             }
-        })
-        
-        
-        camScale(1)
-    } else if (LEVEL.level === 2) {
-        // slows the player down
-        player.speedMultiplier = 0.5;
+            camScale(1.2)
+            break   ;
+            
+        case 4:
+            console.log("level4")
 
-        // for deserts and stuff
-        let currentDesertFig  = "";
-        onCollide("player", "desertfig", (player, desertfig) => {
-            currentDesertFig = desertfig;
-            onKeyPress("c", () => {
-                if(currentDesertFig && player.inventory.tools.includes("shears") == true) {
-                    addExplode(currentDesertFig.pos, 1, 1, 0.5)
-                    destroy(currentDesertFig);
-                } else {
-                    addExclaim("you need shears", player.pos)
-                }
-            })
-        })
-
-        onCollideEnd("player", "desertfig", () => {
-            currentDesertFig = "";
-        })
-
-        
-        camScale(1.2)
-    } else if (LEVEL.level === 3) {
-        let activated = 0;
-        let areAllStationersActivated = false;
-
-        onCollide("activator", "stationer", () => {
-            activated++;
-            console.log(activated)
-            if(activated >= level.get("stationer").length) {
-                areAllStationersActivated = true;
-            }
-        })
-    
-        onCollideEnd("activator", "stationer", () => {
-            activated--;
-            console.log(activated)
-        })
-
-        const numberOfPortalShards = level.get("portalShards").length;
-        const numberOfSpawners = level.get("portalShards").length;
-
-        if(
-            numberOfPortalShards <= 0 && 
-            numberOfSpawners.length <= 0 && 
-            areAllStationersActivated == true
-        ) {
-            player.canGoToNextLevel = true;
-        } else {
-            player.canGoToNextLevel = false;
-        }
-
-    } else if (LEVEL.level === 4) {
-
-    } else if (LEVEL.level === 5) {
-
+            break;
+        case 5:
+            console.log("level5")
+            break;
+        default:
+            console.log("Error level does not exist")
     }
 
-    
 })
+
+
 
 
 // is this necessary????
