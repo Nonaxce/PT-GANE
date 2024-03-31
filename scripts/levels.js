@@ -77,7 +77,7 @@ export const LEVELS_JS = [
         backgroundSprite: "level-3-bg",
         backgroundScale: 4.6,
         levelNote: {
-            text: "Juno 31, 3005  \n I finnally finished the shrine, and it looks a bit weird. \n Well anyway now my comrades and I can safeguard our portals, \n I locked the portal for maintainance reasons, \n the key, its uh hidden somewhere.."
+            text: "D O \n     NOT \n         T  O U CH \n\n Also try connecting those machines, it might make the portal work"
         },
         hasEnemy: false,
         enemySpeed: 200,

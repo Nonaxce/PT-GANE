@@ -186,7 +186,7 @@ const GUN_DAMAGE = 50;
 const BULLET_SPEED = 1200
 
 const SPAWNER_LIMIT = 3;
-let currentLevel = 3;    
+let currentLevel = 0;    
 
 
 
@@ -200,6 +200,12 @@ scene("main_menu", () => {
         pos(width()/2, height()/2- 100),
         anchor("center"),
         scale(2)
+    ])
+    const info = add([
+        text("Press [ENTER] to start", {font: "myFont"}),
+        pos(width()/2, height()/2- 0),
+        anchor("center"),
+        scale(1)
     ])
 
     onKeyPress("enter", () => {
