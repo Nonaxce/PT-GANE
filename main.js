@@ -13,6 +13,25 @@ loadSprite("hell_grass", "sprites/backgrounds/misc/hell_grass.png");
 
 
 // GLOBAL: can be used anywhere
+loadSprite("player", "sprites/character/player.png", {
+    sliceX: 4,
+    sliceY: 2,
+    scale: 1,
+    anims: {
+        run: {
+            from: 0,
+            to: 3,
+            speed: 6,
+            loop: true
+        },
+        idle: {
+            from: 4, 
+            to: 5,
+            speed: 3,
+            loop: true
+        }
+    }
+})
 loadSprite("ejector", "sprites/textures/ejector.png")
 loadSprite("chest", "sprites/textures/chest.png")
 loadSprite("spawner", "sprites/textures/spawner.png")
@@ -125,6 +144,32 @@ loadSprite("lava", "sprites/textures/level-3/lava.png", {
         }
     }
 })
+loadSprite("level-3-bg", "sprites/backgrounds/level-3-bg.png")
+
+
+// LEVEL 4
+loadSprite("level-4-bg", "sprites/backgrounds/level-4-bg.png")
+loadSprite("level-4-enemy", "sprites/enemies/level-4-enemy.png", {
+    sliceX: 4,
+    sliceY: 1,
+    scale: 1,
+    anims: {
+        move: {
+            from: 0,
+            to: 3,
+            speed: 4,
+            loop: true
+        },
+        idle: {
+            from: 0,
+            to: 0,
+            speed: 2,
+            loop: true
+        }
+    }
+})
+
+// LEVEL 5
 
 // font
 loadFont("myFont", "fonts/DotGothic16-Regular.ttf")
@@ -141,7 +186,7 @@ const GUN_DAMAGE = 50;
 const BULLET_SPEED = 1200
 
 const SPAWNER_LIMIT = 3;
-let currentLevel = 2;    
+let currentLevel = 3;    
 
 
 
@@ -207,8 +252,7 @@ scene("game", (LEVEL) => {
 
     const createPlayer = () => {
         return [
-            rect(17, 28),
-            color(255, 3, 23),
+            sprite("player"),
             area(),
             body(),
             health(PLAYER_HEALTH),
@@ -389,7 +433,7 @@ scene("game", (LEVEL) => {
             ],
             // STATIONER
             "(" : () => [
-                sprite("stationer", {flipX: true}),
+                sprite("stationer", {flipY: true}),
                 area(),
                 body({isStatic: true}),
                 anchor("bot"),
@@ -458,14 +502,25 @@ scene("game", (LEVEL) => {
     let left = -BASE_PLAYER_SPEED;
     let right = BASE_PLAYER_SPEED;
 
+    let unFlipped = false;
+    let flipped = true;
+
     onKeyDown("a", () => {
         player.move(left * player.speedMultiplier, 0);
-        player.flipX = true;
+        player.flipX = flipped;
+        player.play("run")
+    })
+    onKeyRelease("a", () => {
+        player.play("idle")
     })
     
     onKeyDown("d", () => {
         player.move(right * player.speedMultiplier, 0);
-        player.flipX = false;
+        player.flipX = unFlipped;
+        player.play("run")
+    })
+    onKeyRelease("d", () => {
+        player.play("idle")
     })
 
     onKeyPress("space", () => {
@@ -515,7 +570,7 @@ scene("game", (LEVEL) => {
             sprite("bullet"),
             scale(1.5),
             area(),
-            pos(player.pos.sub(0, 20)),
+            pos(player.pos.sub(0, 40)),
             move(dir, BULLET_SPEED),
             offscreen({destroy: true}),
             {DIR: dir}, // wala direction data sa gin butang ko na lang diri
@@ -528,7 +583,7 @@ scene("game", (LEVEL) => {
     let fireGunLEFT = 180;  
 
     onMousePress("left", () => {
-        if(player.flipX == true) {
+        if(player.flipX == flipped) {
             fireGun(fireGunLEFT);
         } else {
             fireGun(fireGunRIGHT);
@@ -1037,6 +1092,10 @@ scene("game", (LEVEL) => {
         fireGunRIGHT = fireGunLEFT;
         fireGunLEFT = temp2
         //JUMP_STRENGTH *= (-1); // hindi pwede negative ang jump :<
+
+        let temp3 = unFlipped;
+        unFlipped = flipped;
+        flipped = temp3
     }
 
     /* ---------------------- USER INTERFACE ----------------------- */
@@ -1124,7 +1183,10 @@ scene("game", (LEVEL) => {
             numberOfPortalShards = level.get("portalShard").length;
     
             player.onUpdate(async() => {
-                if(level.get("spawner").length <= 0 && player.inventory.portal_shards == numberOfPortalShards) {
+                if(
+                    level.get("spawner").length <= 0 && 
+                    player.inventory.portal_shards == numberOfPortalShards
+                ) {
                     player.canGoToNextLevel = true;
                 } else {
                     player.canGoToNextLevel = false;
@@ -1137,6 +1199,9 @@ scene("game", (LEVEL) => {
             break;
         case 2:
 
+            // adds pickaxe to inventory
+            player.inventory.tools.push("pickaxe")
+
             // slows the player down kay may hangin
             player.speedMultiplier = 0.5; 
             
@@ -1145,12 +1210,15 @@ scene("game", (LEVEL) => {
             onCollide("player", "desertfig", (player, desertfig) => {
                 currentDesertFig = desertfig;
                 onKeyPress("c", () => {
-                    if(currentDesertFig && player.inventory.tools.includes("shears") == true) {
-                        addExplode(currentDesertFig.pos, 1, 1, 0.5)
-                        destroy(currentDesertFig);
-                    } else {
-                        addExclaim("you need shears", player.pos)
-                    }
+                    if (currentDesertFig) {
+                        // if the player has "pickaxe" in their inventory 
+                        if (player.inventory.tools.includes("shears") === true) {
+                            addExplode(player.pos, 1, 1, 1)
+                            destroy(currentDesertFig)
+                        } else {
+                            addExclaim("you need shears", player.pos)
+                        }
+                    } 
                 })
             })
 
@@ -1165,41 +1233,55 @@ scene("game", (LEVEL) => {
 
             let activated = 0;
             let areAllStationersActivated = false;
+            numberOfPortalShards = level.get("portalShard").length;
 
             onCollide("activator", "stationer", () => {
                 activated++;
-                console.log(activated)
+                debug.log(activated)  
                 if(activated >= level.get("stationer").length) {
                     areAllStationersActivated = true;
+                    debug.log("can now enter")
                 }
             })
-        
             onCollideEnd("activator", "stationer", () => {
                 activated--;
-                console.log(activated)
+                debug.log(activated)
             })
 
-            numberOfPortalShards = level.get("portalShards").length;
-            numberOfSpawners = level.get("portalShards").length;
+            
 
-            if(
-                numberOfPortalShards <= 0 && 
-                numberOfSpawners.length <= 0 && 
-                areAllStationersActivated == true
-            ) {
-                player.canGoToNextLevel = true;
-            } else {
-                player.canGoToNextLevel = false;
-            }
-            camScale(1.2)
-            break   ;
+            onUpdate(async() => {
+                if(
+                    player.inventory.portal_shards == numberOfPortalShards &&
+                    areAllStationersActivated == true
+                ) {
+                    player.canGoToNextLevel = true;
+                } else {
+                    player.canGoToNextLevel = false;
+                    
+                }
+                // debug.log(`
+                //     Stationers: ${areAllStationersActivated} 
+                //     ${player.inventory.portal_shards} / ${numberOfPortalShards}
+                // `)
+            })
+            camScale(1.1)
+            break;
             
         case 4:
             console.log("level4")
 
+            reverseGravity()
+            player.inventory.tools.push("pickaxe")
+            player.inventory.tools.push("shears")
+
             break;
         case 5:
             console.log("level5")
+
+            player.inventory.tools.push("pickaxe")
+            player.inventory.tools.push("shears")
+            
             break;
         default:
             console.log("Error level does not exist")
